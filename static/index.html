@@ -549,6 +549,10 @@
     hiddenInput.addEventListener('focus', () => {
       display.classList.add('focused');
       renderDisplay();
+      // Scroll to avoid iOS address bar coverage
+      setTimeout(() => {
+        display.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
     });
 
     hiddenInput.addEventListener('blur', () => {
@@ -587,7 +591,7 @@
         if (data.success) {
           const restartNote = data.restarted
             ? '— container restarted ✓'
-            : '— paired successfully; restart skipped because docker CLI is unavailable.';
+            : '— paired successfully; restart skipped because Docker restart is unavailable.';
           showToast('success', `Paired: ${data.device.name}`, restartNote);
           rawCode = '';
           hiddenInput.value = '';
@@ -606,6 +610,9 @@
       }
     }
 
+    // Store the current devices list to avoid embedding raw IDs into inline JS
+    let currentDevices = [];
+
     async function removeDevice(screenId, name) {
       if (!confirm(`Remove "${name}" from iSponsorBlockTV?`)) return;
 
@@ -619,7 +626,7 @@
         if (data.success) {
           const restartNote = data.restarted
             ? 'container restarted ✓'
-            : 'restart skipped because docker CLI is unavailable.';
+            : 'restart skipped because Docker restart is unavailable.';
           showToast('success', `Removed: ${name}`, restartNote);
           loadDevices();
         } else {
@@ -630,12 +637,20 @@
       }
     }
 
+    function removeDeviceByIndex(idx) {
+      const d = currentDevices[idx];
+      if (!d) return showToast('error', 'Remove Failed', 'Device not found');
+      removeDevice(d.screen_id, d.name);
+    }
+
     async function loadDevices() {
       try {
         const res = await fetch('/api/devices');
         const data = await res.json();
-        renderDevices(data.devices || []);
+        currentDevices = data.devices || [];
+        renderDevices(currentDevices);
       } catch {
+        currentDevices = [];
         renderDevices([]);
       }
     }
@@ -650,14 +665,14 @@
           </div>`;
         return;
       }
-      list.innerHTML = devices.map(d => `
+      list.innerHTML = devices.map((d, i) => `
         <div class="device-row">
           <div class="device-dot"></div>
           <div class="device-info">
             <div class="device-name">${escHtml(d.name)}</div>
             <div class="device-id">${escHtml(d.screen_id)}</div>
           </div>
-          <button class="btn-remove" onclick="removeDevice('${escHtml(d.screen_id)}','${escHtml(d.name)}')" title="Remove">✕</button>
+          <button class="btn-remove" onclick="removeDeviceByIndex(${i})" title="Remove">✕</button>
         </div>`).join('');
     }
 
