@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+  <title>iSponsorBlockTV</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0f14;
+      --surface: #141720;
+      --surface2: #1c2030;
+      --border: #252a3a;
+      --accent: #4ade80;
+      --accent-dim: rgba(74, 222, 128, 0.12);
+      --accent-glow: rgba(74, 222, 128, 0.35);
+      --red: #f87171;
+      --red-dim: rgba(248, 113, 113, 0.12);
+      --text: #e8ecf5;
+      --text-muted: #6b7590;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Syne', sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 48px;
+    }
+
+    /* Ambient background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 400px;
+      background: radial-gradient(ellipse, rgba(74,222,128,0.07) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+      padding-top: 12px;
+    }
+
+    .logo-mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: #0d0f14;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      margin-top: 4px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 24px;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    /* TV Code input */
+    .code-input-wrapper {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .code-input-label {
+      display: block;
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    #tvCodeDisplay {
+      width: 100%;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 12px;
+      font-family: var(--mono);
+      font-size: clamp(17px, 4.8vw, 26px);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      text-align: center;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      cursor: text;
+      min-height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      position: relative;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    #tvCodeDisplay.has-value {
+      border-color: rgba(74, 222, 128, 0.4);
+    }
+
+    #tvCodeDisplay.focused {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-glow);
+    }
+
+    #tvCodeDisplay .placeholder {
+      color: var(--border);
+      font-size: clamp(15px, 4vw, 22px);
+      letter-spacing: 0.1em;
+    }
+
+    #tvCodeDisplay .cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1.1em;
+      background: var(--accent);
+      margin-left: 2px;
+      animation: blink 1s step-end infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* Hidden real input */
+    #tvCodeHidden {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+      width: 1px;
+      height: 1px;
+      top: 0;
+      left: 0;
+    }
+
+    .tap-hint {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      margin-top: 8px;
+    }
+
+    /* Device name input */
+    .name-input-label {
+      display: block;
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      margin-top: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    #deviceName {
+      width: 100%;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-family: var(--sans);
+      font-size: 16px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    #deviceName::placeholder { color: var(--border); }
+
+    #deviceName:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    /* Submit button */
+    .btn-add {
+      width: 100%;
+      margin-top: 20px;
+      padding: 18px;
+      background: var(--accent);
+      color: #0d0f14;
+      border: none;
+      border-radius: 12px;
+      font-family: var(--sans);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-add:hover:not(:disabled) {
+      box-shadow: 0 0 24px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+
+    .btn-add:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-add:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-add .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(13,15,20,0.3);
+      border-top-color: #0d0f14;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast / status */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 20px;
+      font-size: 14px;
+      font-family: var(--mono);
+      max-width: calc(100vw - 32px);
+      width: 440px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 100;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    #toast.visible {
+      transform: translateX(-50%) translateY(0);
+    }
+
+    #toast.success { border-color: rgba(74,222,128,0.4); }
+    #toast.error { border-color: rgba(248,113,113,0.4); }
+
+    .toast-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .toast-body { flex: 1; }
+    .toast-title { font-weight: 700; margin-bottom: 2px; }
+    .toast-msg { color: var(--text-muted); font-size: 12px; line-height: 1.4; }
+
+    #toast.success .toast-title { color: var(--accent); }
+    #toast.error .toast-title { color: var(--red); }
+
+    /* Devices list */
+    #devicesList {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .device-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .device-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+      box-shadow: 0 0 6px var(--accent);
+    }
+
+    .device-info { flex: 1; min-width: 0; }
+
+    .device-name {
+      font-size: 15px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .device-id {
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .btn-remove {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      font-size: 18px;
+      width: 34px;
+      height: 34px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+
+    .btn-remove:hover {
+      background: var(--red-dim);
+      color: var(--red);
+      border-color: rgba(248,113,113,0.3);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 24px 0 8px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    .empty-state .empty-icon {
+      font-size: 32px;
+      margin-bottom: 10px;
+      opacity: 0.4;
+    }
+
+    /* How-to hint */
+    .hint-box {
+      background: var(--accent-dim);
+      border: 1px solid rgba(74,222,128,0.2);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--accent);
+      line-height: 1.6;
+      margin-top: 4px;
+    }
+
+    .hint-box strong { font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <img src="/static/canopy-logo.png" alt="" style="display:block;width:100%;max-width:120px;margin:0 auto 20px;border-radius:12px;" />
+      <h1>iSponsorBlock<span style="color:var(--accent)">TV</span></h1>
+      <p class="subtitle">device manager</p>
+    </header>
+
+    <!-- Pair new device -->
+    <div class="card">
+      <p class="card-title">Pair New Device</p>
+
+      <div class="hint-box">
+        On your TV → YouTube app → <strong>Settings → Link with TV code</strong>
+      </div>
+
+      <div class="code-input-wrapper" style="margin-top:20px;">
+        <label class="code-input-label" for="tvCodeHidden">TV Link Code</label>
+        <div id="tvCodeDisplay" role="textbox" aria-label="TV Link Code" tabindex="0">
+          <span class="placeholder">XXX XXX XXX XXX</span>
+        </div>
+        <input
+          id="tvCodeHidden"
+          type="tel"
+          inputmode="numeric"
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+          maxlength="20"
+        />
+        <p class="tap-hint">tap to enter code</p>
+      </div>
+
+      <label class="name-input-label" for="deviceName">Device Name <span style="color:var(--text-muted);font-size:10px;">(optional)</span></label>
+      <input
+        id="deviceName"
+        type="text"
+        placeholder="e.g. Living Room TV"
+        autocomplete="off"
+        maxlength="64"
+      />
+
+      <button class="btn-add" id="addBtn" onclick="addDevice()" disabled>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        Pair Device
+      </button>
+    </div>
+
+    <!-- Paired devices -->
+    <div class="card">
+      <p class="card-title">Paired Devices</p>
+      <div id="devicesList">
+        <div class="empty-state">
+          <div class="empty-icon">📺</div>
+          <div>Loading devices...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast">
+    <div class="toast-icon" id="toastIcon"></div>
+    <div class="toast-body">
+      <div class="toast-title" id="toastTitle"></div>
+      <div class="toast-msg" id="toastMsg"></div>
+    </div>
+  </div>
+
+  <script>
+    // ─── TV Code Input Logic ───────────────────────────────────────────────
+    const display = document.getElementById('tvCodeDisplay');
+    const hiddenInput = document.getElementById('tvCodeHidden');
+    const addBtn = document.getElementById('addBtn');
+    let rawCode = '';
+
+    function formatCode(raw) {
+      // Remove non-digits, cap at 12
+      const digits = raw.replace(/\D/g, '').slice(0, 12);
+      // 4 groups of 3, separated by narrow spaces
+      const parts = [];
+      for (let i = 0; i < digits.length; i += 3) {
+        parts.push(digits.slice(i, i + 3));
+      }
+      return parts.join('\u2006'); // thin space between groups
+    }
+
+    function renderDisplay() {
+      const formatted = formatCode(rawCode);
+      if (!rawCode) {
+        display.innerHTML = '<span class="placeholder">XXX XXX XXX XXX</span>';
+        display.classList.remove('has-value');
+      } else {
+        display.innerHTML = formatted + (document.activeElement === hiddenInput ? '<span class="cursor"></span>' : '');
+        display.classList.add('has-value');
+      }
+      // Enable button if we have at least 6 digits
+      const digits = rawCode.replace(/\D/g, '');
+      addBtn.disabled = digits.length < 6;
+    }
+
+    // Clicking the display focuses the hidden input
+    display.addEventListener('click', () => hiddenInput.focus());
+    display.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') hiddenInput.focus();
+    });
+
+    hiddenInput.addEventListener('focus', () => {
+      display.classList.add('focused');
+      renderDisplay();
+    });
+
+    hiddenInput.addEventListener('blur', () => {
+      display.classList.remove('focused');
+      renderDisplay();
+    });
+
+    hiddenInput.addEventListener('input', () => {
+      rawCode = hiddenInput.value.replace(/\D/g, '').slice(0, 12);
+      hiddenInput.value = rawCode;
+      renderDisplay();
+    });
+
+    hiddenInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !addBtn.disabled) addDevice();
+    });
+
+    // ─── API Calls ────────────────────────────────────────────────────────
+    async function addDevice() {
+      const digits = rawCode.replace(/\D/g, '');
+      if (digits.length < 6) return;
+
+      const name = document.getElementById('deviceName').value.trim();
+
+      addBtn.disabled = true;
+      addBtn.innerHTML = '<div class="spinner"></div> Pairing...';
+
+      try {
+        const res = await fetch('/api/add-device', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tv_code: digits, name })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          const restartNote = data.restarted
+            ? '— container restarted ✓'
+            : '— paired successfully; restart skipped because docker CLI is unavailable.';
+          showToast('success', `Paired: ${data.device.name}`, restartNote);
+          rawCode = '';
+          hiddenInput.value = '';
+          document.getElementById('deviceName').value = '';
+          renderDisplay();
+          loadDevices();
+        } else {
+          showToast('error', 'Pairing Failed', data.error || 'Unknown error');
+        }
+      } catch (e) {
+        showToast('error', 'Network Error', e.message);
+      } finally {
+        addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg> Pair Device`;
+        const digits2 = rawCode.replace(/\D/g, '');
+        addBtn.disabled = digits2.length < 6;
+      }
+    }
+
+    async function removeDevice(screenId, name) {
+      if (!confirm(`Remove "${name}" from iSponsorBlockTV?`)) return;
+
+      try {
+        const res = await fetch('/api/remove-device', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ screen_id: screenId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          const restartNote = data.restarted
+            ? 'container restarted ✓'
+            : 'restart skipped because docker CLI is unavailable.';
+          showToast('success', `Removed: ${name}`, restartNote);
+          loadDevices();
+        } else {
+          showToast('error', 'Remove Failed', data.error);
+        }
+      } catch (e) {
+        showToast('error', 'Network Error', e.message);
+      }
+    }
+
+    async function loadDevices() {
+      try {
+        const res = await fetch('/api/devices');
+        const data = await res.json();
+        renderDevices(data.devices || []);
+      } catch {
+        renderDevices([]);
+      }
+    }
+
+    function renderDevices(devices) {
+      const list = document.getElementById('devicesList');
+      if (!devices.length) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📺</div>
+            <div>No devices paired yet</div>
+          </div>`;
+        return;
+      }
+      list.innerHTML = devices.map(d => `
+        <div class="device-row">
+          <div class="device-dot"></div>
+          <div class="device-info">
+            <div class="device-name">${escHtml(d.name)}</div>
+            <div class="device-id">${escHtml(d.screen_id)}</div>
+          </div>
+          <button class="btn-remove" onclick="removeDevice('${escHtml(d.screen_id)}','${escHtml(d.name)}')" title="Remove">✕</button>
+        </div>`).join('');
+    }
+
+    // ─── Toast ────────────────────────────────────────────────────────────
+    let toastTimer;
+    function showToast(type, title, msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastIcon').textContent = type === 'success' ? '✓' : '✗';
+      document.getElementById('toastTitle').textContent = title;
+      document.getElementById('toastMsg').textContent = msg || '';
+      toast.className = `visible ${type}`;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toast.className = type; }, 4500);
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    // Init
+    renderDisplay();
+    loadDevices();
+  </script>
+</body>
+</html>
