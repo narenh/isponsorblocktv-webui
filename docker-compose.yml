@@ -1,0 +1,36 @@
+# Shared-config deployment: both containers bind-mount the SAME host directory
+# at /app/data, so they read and write the same config.json.
+#
+# 1. Replace /PATH_TO_YOUR_DATA_DIR below with your existing iSponsorBlockTV
+#    data directory (the one that already holds config.json).
+# 2. docker compose up -d --build
+# 3. Open http://<host>:5000
+#
+# The web UI has no authentication. Keep port 5000 on your LAN or behind a
+# reverse proxy that adds auth.
+
+services:
+  iSponsorBlockTV:
+    image: ghcr.io/dmunozv04/isponsorblocktv
+    container_name: iSponsorBlockTV
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /PATH_TO_YOUR_DATA_DIR:/app/data
+
+  isponsorblocktv-webui:
+    build: .
+    # image: isponsorblocktv-webui        # if you built/pushed it yourself
+    container_name: isponsorblocktv-webui
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      # Same host path as above -> shared config.json
+      - /PATH_TO_YOUR_DATA_DIR:/app/data
+      # Lets the UI restart iSponsorBlockTV after a config change.
+      # This grants full control of the Docker daemon - see README.
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      CONFIG_PATH: /app/data/config.json
+      ISPONSORTV_CONTAINER: iSponsorBlockTV
