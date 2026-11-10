@@ -3,6 +3,8 @@ import json
 import os
 import socket
 import logging
+import threading
+import time
 from pathlib import Path
 from urllib.parse import quote
 from flask import Flask, request, jsonify, send_from_directory
@@ -56,7 +58,8 @@ async def pair_with_youtube(tv_code: str):
     }
     data = {"pairing_code": clean_code}
 
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(url, headers=headers, data=data) as resp:
             if resp.status != 200:
                 raise ValueError(f"YouTube API returned HTTP {resp.status}. The code may be expired or invalid.")
@@ -83,6 +86,8 @@ def restart_container():
 
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            # Docker waits up to t=30s for a graceful stop; leave headroom.
+            sock.settimeout(60)
             sock.connect(str(DOCKER_SOCKET_PATH))
             container = quote(ISPONSORTV_CONTAINER, safe="")
             request = (
@@ -117,6 +122,49 @@ def restart_container():
     except Exception as e:
         logger.warning(f"Docker socket restart failed: {e}")
         return False, f"Container restart failed: {e}"
+
+
+# ─── Background restart tracking ──────────────────────────────────────────
+# Single-process server, so in-memory state is sufficient.
+_restart_lock = threading.Lock()
+_restart_state = {"state": "idle", "message": "", "started_at": None, "finished_at": None}
+_restart_again = False
+
+
+def _restart_worker():
+    global _restart_again
+    while True:
+        ok, msg = restart_container()
+        with _restart_lock:
+            if _restart_again:
+                # Config changed again while restarting; restart once more.
+                _restart_again = False
+                _restart_state["started_at"] = time.time()
+                continue
+            _restart_state.update(
+                state="done" if ok else "failed",
+                message=msg,
+                finished_at=time.time(),
+            )
+            return
+
+
+def request_restart():
+    """Kick off a container restart without blocking the caller."""
+    global _restart_again
+    with _restart_lock:
+        if _restart_state["state"] == "restarting":
+            _restart_again = True
+            return
+        _restart_state.update(
+            state="restarting", message="", started_at=time.time(), finished_at=None
+        )
+    threading.Thread(target=_restart_worker, daemon=True).start()
+
+
+def restart_status():
+    with _restart_lock:
+        return dict(_restart_state)
 
 
 @app.route("/")
@@ -160,14 +208,13 @@ def add_device():
     config["devices"] = devices
     save_config(config)
 
-    # Restart container
-    restarted, restart_msg = restart_container()
+    # Restart container in the background; client polls /api/restart-status
+    request_restart()
 
     return jsonify({
         "success": True,
         "device": {"screen_id": screen_id, "name": device_name},
-        "restarted": restarted,
-        "restart_message": restart_msg
+        "restart": restart_status()
     })
 
 
@@ -186,9 +233,14 @@ def remove_device():
         return jsonify({"success": False, "error": "Device not found"}), 404
 
     save_config(config)
-    restarted, restart_msg = restart_container()
+    request_restart()
 
-    return jsonify({"success": True, "restarted": restarted, "restart_message": restart_msg})
+    return jsonify({"success": True, "restart": restart_status()})
+
+
+@app.route("/api/restart-status", methods=["GET"])
+def get_restart_status():
+    return jsonify(restart_status())
 
 
 if __name__ == "__main__":

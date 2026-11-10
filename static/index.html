@@ -292,6 +292,32 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Restart status */
+    #restartStatus {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    #restartStatus.visible { display: flex; }
+    #restartStatus.done { color: var(--accent); background: var(--accent-dim); border-color: rgba(74,222,128,0.2); }
+    #restartStatus.failed { color: var(--red); background: var(--red-dim); border-color: rgba(248,113,113,0.25); }
+    #restartStatus .spinner {
+      flex: none;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
     /* Toast / status */
     #toast {
       position: fixed;
@@ -490,6 +516,7 @@
     <!-- Paired devices -->
     <div class="card">
       <p class="card-title">Paired Devices</p>
+      <div id="restartStatus" role="status" aria-live="polite"></div>
       <div id="devicesList">
         <div class="empty-state">
           <div class="empty-icon">📺</div>
@@ -589,10 +616,8 @@
         const data = await res.json();
 
         if (data.success) {
-          const restartNote = data.restarted
-            ? '— container restarted ✓'
-            : '— paired successfully; restart skipped because Docker restart is unavailable.';
-          showToast('success', `Paired: ${data.device.name}`, restartNote);
+          showToast('success', `Paired: ${data.device.name}`, 'Restarting iSponsorBlockTV in the background…');
+          trackRestart();
           rawCode = '';
           hiddenInput.value = '';
           document.getElementById('deviceName').value = '';
@@ -610,6 +635,44 @@
       }
     }
 
+    // ─── Restart status polling ───────────────────────────────────────────
+    const restartEl = document.getElementById('restartStatus');
+    let restartPoll = null;
+    let restartHideTimer = null;
+
+    function renderRestart(st) {
+      clearTimeout(restartHideTimer);
+      if (st.state === 'restarting') {
+        restartEl.className = 'visible';
+        restartEl.innerHTML = '<div class="spinner"></div><span>Restarting iSponsorBlockTV…</span>';
+      } else if (st.state === 'done') {
+        restartEl.className = 'visible done';
+        restartEl.textContent = '✓ iSponsorBlockTV restarted — changes are live';
+        restartHideTimer = setTimeout(() => { restartEl.className = ''; }, 6000);
+      } else if (st.state === 'failed') {
+        restartEl.className = 'visible failed';
+        restartEl.textContent = '✗ ' + (st.message || 'Restart failed') + ' (saved, but not applied until restart)';
+      } else {
+        restartEl.className = '';
+      }
+    }
+
+    async function pollRestart() {
+      try {
+        const st = await (await fetch('/api/restart-status')).json();
+        renderRestart(st);
+        if (st.state !== 'restarting') {
+          clearInterval(restartPoll);
+          restartPoll = null;
+        }
+      } catch { /* transient; keep polling */ }
+    }
+
+    function trackRestart() {
+      renderRestart({ state: 'restarting' });
+      if (!restartPoll) restartPoll = setInterval(pollRestart, 1000);
+    }
+
     // Store the current devices list to avoid embedding raw IDs into inline JS
     let currentDevices = [];
 
@@ -624,10 +687,8 @@
         });
         const data = await res.json();
         if (data.success) {
-          const restartNote = data.restarted
-            ? 'container restarted ✓'
-            : 'restart skipped because Docker restart is unavailable.';
-          showToast('success', `Removed: ${name}`, restartNote);
+          showToast('success', `Removed: ${name}`, 'Restarting iSponsorBlockTV in the background…');
+          trackRestart();
           loadDevices();
         } else {
           showToast('error', 'Remove Failed', data.error);
@@ -695,6 +756,10 @@
     // Init
     renderDisplay();
     loadDevices();
+    // If a restart is already in flight (e.g. page reload), resume tracking it.
+    fetch('/api/restart-status').then(r => r.json()).then(st => {
+      if (st.state === 'restarting') trackRestart();
+    }).catch(() => {});
   </script>
 </body>
 </html>
